@@ -50,9 +50,9 @@ namespace DesignLogger
         protected double oldHour = -1.0;
 
         public DesignLoggerComponent()
-          : base("DesignLogger", "DLog",
+          : base("DesignLogger", "DLogger",
               "Logs a design exploration session",
-              "DSE", "Research")
+              "DSE", "Catalog")
         {
 
             this.DVecs = new List<List<double>>();
@@ -219,7 +219,7 @@ namespace DesignLogger
 
         public void PrintAllSolutions()
         {
-            System.IO.StreamWriter file = new System.IO.StreamWriter(this.path);
+            System.IO.StreamWriter file = new System.IO.StreamWriter(this.path + participant.ToString() + "_" + DateTime.Now.ToString("HHmmss") + ".csv");
 
             for (int i = 0; i < this.DVecs.Count; i++)
             {
@@ -291,7 +291,7 @@ namespace DesignLogger
             {
                 // You can add image files to your project resources and access them like this:
                 //return Resources.IconForThisComponent;
-                return null;
+                return DesignLogger.Properties.Resources.Logger;
             }
         }
 
