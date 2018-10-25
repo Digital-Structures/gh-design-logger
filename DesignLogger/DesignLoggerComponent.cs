@@ -37,9 +37,6 @@ namespace DesignLogger
 
         protected StreamWriter file = null;
 
-        /// Timer to end session.
-        protected Timer timer = null;
-
         /// Previous month value.
         protected int oldMonth = -1;
 
@@ -61,8 +58,11 @@ namespace DesignLogger
             this.OVec = new List<double>();
             this.Favorites = new List<List<double>>();
             this.timelist = new List<string>();
+            this.sectionlist = new List<int>();
+            this.elapsedlist = new List<double>();
             this.count = new int();
             this.favCount = new List<double>();
+            this.timeListDate = new List<DateTime>();
         }
 
         public List<List<double>> DVecs;
@@ -71,6 +71,9 @@ namespace DesignLogger
         public List<double> DVec;
         public List<double> OVec;
         public List<string> timelist;
+        public List<DateTime> timeListDate;
+        public List<double> elapsedlist;
+        public List<int> sectionlist;
         public Boolean favorite = false;
         public Boolean End = false;
         public string path;
@@ -78,6 +81,11 @@ namespace DesignLogger
         public Boolean first = true;
         public int count;
         public List<double> favCount;
+        public double lastTime = 0;
+        public int section;
+        System.Timers.Timer sectionTimer;
+        System.Timers.Timer saveTimer;
+
 
         /// <summary>
         /// Registers all the input parameters for this component.
@@ -90,10 +98,7 @@ namespace DesignLogger
             pManager.AddNumberParameter("Session Length", "SL", "Session length in minutes", GH_ParamAccess.item, 0.5);
             pManager.AddTextParameter("Log Path", "L", "Log file path", GH_ParamAccess.item, (string)null);
 
-
-            pManager.AddIntegerParameter("Month", "M", "Month [1, 12]", GH_ParamAccess.item, 1);
-            pManager.AddIntegerParameter("Day", "D", "Day of month [1, DaysInMonth]", GH_ParamAccess.item, 1);
-            pManager.AddNumberParameter("Hour", "H", "Hour of day [0, 24]", GH_ParamAccess.item, 12.0);
+            pManager.AddIntegerParameter("Phase", "Phase", "Design study phase: 1-4", GH_ParamAccess.item, 1);
 
             pManager.AddNumberParameter("Design Vector", "DVec", "Reads design vector", GH_ParamAccess.list);
             pManager.AddNumberParameter("Objective Vector", "OVec", "Reads objective vector", GH_ParamAccess.list);
@@ -145,33 +150,41 @@ namespace DesignLogger
                     DialogResult result = MessageBox.Show(string.Format("Your {0}-minute session will begin when you press OK.", minutes), "Start Session", MessageBoxButtons.OKCancel, MessageBoxIcon.Information);
                     if (result != DialogResult.OK) return;
 
-                    timer = new Timer();
-                    timer.Interval = (int)(minutes * 60 * 1000);
+                    // Set up section timer (COMMENTED--DO TIMING MANUALLY)
+                    //sectionTimer = new System.Timers.Timer();
+                    //sectionTimer.Elapsed += new System.Timers.ElapsedEventHandler(nextSection);
+                    //sectionTimer.Interval = 15 * 60 * 1000;
+                    //sectionTimer.Enabled = true;
 
+                    // Set up autosave timer
+                    saveTimer = new System.Timers.Timer();
+                    saveTimer.Elapsed += new System.Timers.ElapsedEventHandler(autoSaveProgress);
+                    // Autosave every 10 minutes
+                    saveTimer.Interval = 1 * 60 * 1000;
+                    saveTimer.Enabled = true;
+                    section = 1;
 
-                    //file = new StreamWriter(path);
-                    //log("start");
-                    timer.Start();
                     first = false;
 
+                    // Populate initial lists
                     favCount.Add(0);
+                    timelist.Add("0");
+                    sectionlist.Add(0);
+                    elapsedlist.Add(0);
+                    timeListDate.Add(DateTime.Now);
+                    List<double> DVecStart = new List<double>();
+                    List<double> OVecStart = new List<double>();
+
+                    DA.GetDataList<double>(5, DVecStart);
+                    DA.GetDataList<double>(6, OVecStart);
+       
+                    DVecs.Add(DVecStart);
+                    OVecs.Add(OVecStart);
+
+
                 }
             }
 
-            int month = oldMonth;
-            DA.GetData(4, ref month);
-            int day = oldDay;
-            DA.GetData(5, ref day);
-            double hour = oldHour;
-            DA.GetData(6, ref hour);
-            if (month != oldMonth || day != oldDay || hour != oldHour)
-            {
-                oldMonth = month;
-                oldDay = day;
-                oldHour = hour;
-                log(string.Format("time {0} {1} {2}", month, day, hour));
-
-            }
 
             DVec.Clear();
             OVec.Clear();
@@ -179,42 +192,65 @@ namespace DesignLogger
             List<double> DVecTemp = new List<double>();
             List<double> OVecTemp = new List<double>();
 
-            DA.GetDataList<double>(7, DVecTemp);
-            DA.GetDataList<double>(8, OVecTemp);
+            DA.GetData(4, ref section);
+            DA.GetDataList<double>(5, DVecTemp);
+            DA.GetDataList<double>(6, OVecTemp);
 
-            DA.GetData(9, ref favorite);
-            DA.GetData(10, ref End);
+            DA.GetData(7, ref favorite);
+            DA.GetData(8, ref End);
 
 
+            // Give threshold for recording data
+            //double currentTime = DateTime.Now.Ticks;
 
-            DVecs.Add(DVecTemp);
-            OVecs.Add(OVecTemp);
-            timelist.Add(DateTime.Now.ToString());
+            string now = DateTime.Now.ToString("yyyyMMddHHmmss");
+            double nowTime = Convert.ToDouble(now);
+            double lastTime = Convert.ToDouble(timelist[count]);
+            double timeDif = DateTime.Now.Subtract(timeListDate[count]).TotalSeconds;
 
-            if (favorite == true)
+            if (nowTime - lastTime > .0001)
             {
-                Favorites.Add(DVec);
+
+                DVecs.Add(DVecTemp);
+                OVecs.Add(OVecTemp);
+                timelist.Add(DateTime.Now.ToString("yyyyMMddHHmmss"));
+                timeListDate.Add(DateTime.Now);
+                elapsedlist.Add(timeDif);
+                sectionlist.Add(section);
+
+                count++;
             }
 
+                if (favorite == true)
+                {
+                    Favorites.Add(DVec);
+                }
 
-            if (End == true)
-            {
-                PrintAllSolutions();
-                endSession();
-            }
 
-            // keep counter and mark favorites
+                if (End == true)
+                {
+                    PrintAllSolutions();
+                    //sectionTimer.Stop();
+                    saveTimer.Stop();
+                    endSession();
 
-            favCount.Add(0);
-            count++;
-            if (favorite == true)
-            {
-                MakeFavorite(DVecTemp);
-            }
+                }
 
-            //Add favorites output
+                // keep counter and mark favorites
 
-            DA.SetDataTree(0, ListOfListsToTree<double>(this.Favorites));
+                favCount.Add(0);
+                
+                if (favorite == true)
+                {
+                    MakeFavorite(DVecTemp);
+                }
+
+                //Add favorites output
+
+                DA.SetDataTree(0, ListOfListsToTree<double>(this.Favorites));
+
+                //lastTime = DateTime.Now.Ticks;
+            
         }
 
         public void PrintAllSolutions()
@@ -238,7 +274,9 @@ namespace DesignLogger
                 }
 
                 design = design + timelist[i] + ",";
-                design = design + favCount[i];
+                design = design + elapsedlist[i] + ",";
+                design = design + favCount[i] + ",";
+                design = design + sectionlist[i];
 
                 file.WriteLine(design);
             }
@@ -253,9 +291,24 @@ namespace DesignLogger
             //Command.UndoRedo -= HandleUndoRedo;
 
             MessageBox.Show("Please complete the survey", "Time's Up!", MessageBoxButtons.OK, MessageBoxIcon.Stop);
-            //System.Diagnostics.Process.Start("https://docs.google.com/forms/d/e/1FAIpQLSdoG65HJc6DJ8ftrhCFpKtwzyqxgfewwfIt7OOYLKp3WUhGUQ/viewform");
+            System.Diagnostics.Process.Start("https://goo.gl/forms/JaaCTzpEnsi6MTNL2");
 
         }
+
+        //NOT CURRENTLY USED--can be used to automate timing and section
+        //public void nextSection(object sender, EventArgs e)
+        //{
+        //    MessageBox.Show("Section time up! Please move on to next section.  If all four are completed, please press 'end session'", "Next Section", MessageBoxButtons.OK, MessageBoxIcon.Stop);
+        //    section = section + 1;
+
+        //    if (section > 4)
+        //    {
+        //        sectionTimer.Stop();
+        //        saveTimer.Stop();
+        //    }
+
+        //}
+
 
         public void MakeFavorite(List<double> Temp)
         {
@@ -279,6 +332,39 @@ namespace DesignLogger
                 tree.AddRange(listofLists[i], new GH_Path(i));
             }
             return tree;
+        }
+
+
+        private void autoSaveProgress(object sender, EventArgs e)
+        {
+
+            System.IO.StreamWriter file = new System.IO.StreamWriter(this.path + participant.ToString() + "_" +"Backup" + ".csv");
+
+            for (int i = 0; i < this.DVecs.Count; i++)
+            {
+                string design = "";
+
+                List<double> currentDesign = DVecs[i];
+                for (int j = 0; j < currentDesign.Count; j++)
+                {
+                    design = design + currentDesign[j] + ",";
+                }
+
+                List<double> currentObj = OVecs[i];
+                for (int j = 0; j < currentObj.Count; j++)
+                {
+                    design = design + currentObj[j] + ",";
+                }
+
+                design = design + timelist[i] + ",";
+                design = design + elapsedlist[i] + ",";
+                design = design + favCount[i] + ",";
+                design = design + sectionlist[i];
+
+                file.WriteLine(design);
+            }
+            file.Close();
+
         }
 
         /// <summary>
