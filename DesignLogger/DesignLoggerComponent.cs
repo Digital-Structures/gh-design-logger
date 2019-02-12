@@ -147,7 +147,7 @@ namespace DesignLogger
                     DA.GetData(3, ref path);
 
 
-                    DialogResult result = MessageBox.Show(string.Format("Your {0}-minute session will begin when you press OK.", minutes), "Start Session", MessageBoxButtons.OKCancel, MessageBoxIcon.Information);
+                    DialogResult result = MessageBox.Show(string.Format("Your session will begin when you press OK.", minutes), "Start Session", MessageBoxButtons.OKCancel, MessageBoxIcon.Information);
                     if (result != DialogResult.OK) return;
 
                     // Set up section timer (COMMENTED--DO TIMING MANUALLY)
@@ -291,7 +291,7 @@ namespace DesignLogger
             //Command.UndoRedo -= HandleUndoRedo;
 
             MessageBox.Show("Please complete the survey", "Time's Up!", MessageBoxButtons.OK, MessageBoxIcon.Stop);
-            System.Diagnostics.Process.Start("https://goo.gl/forms/JaaCTzpEnsi6MTNL2");
+            System.Diagnostics.Process.Start("https://mit.co1.qualtrics.com/jfe/form/SV_3gQIRSqsXLJwZp3");
 
         }
 
